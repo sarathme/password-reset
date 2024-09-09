@@ -20,8 +20,6 @@ exports.signup = catchAsync(async (req, res, next) => {
     return;
   }
 
-  console.log(req.body);
-
   await client.connect();
   const database = client.db("Password_Reset");
   const userCollection = database.collection("users");
@@ -47,14 +45,43 @@ exports.signup = catchAsync(async (req, res, next) => {
 
   await client.close();
 
-  console.log(user);
-  const token = jwt.sign({ id: created.insertedId }, process.env.JWT_SECRET, {
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
 
   res.status(200).json({
     status: "success",
-    message: "User created successfully",
+    token,
+    data: {
+      user,
+    },
+  });
+});
+
+exports.login = catchAsync(async (req, res, next) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    next(new AppError("Please provide email and password", 400));
+    return;
+  }
+  await client.connect();
+  const database = client.db("Password_Reset");
+  const userCollection = database.collection("users");
+
+  const user = await userCollection.findOne({ email });
+
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    next(new AppError("Invalid email or password", 401));
+    await client.close();
+    return;
+  }
+  user.password = undefined;
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN,
+  });
+
+  res.status(200).json({
+    status: "success",
     token,
     data: {
       user,
