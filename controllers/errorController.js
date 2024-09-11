@@ -1,3 +1,5 @@
+// Global error handling middleware for entire express app.
+
 module.exports = (err, req, res, next) => {
   if (!err.isOperational) {
     return res.status(500).json({
