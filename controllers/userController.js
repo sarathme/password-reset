@@ -78,22 +78,13 @@ exports.signup = catchAsync(async (req, res, next) => {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
 
-  // Setting the cookies.
-
-  res.cookie("jtoken", token, {
-    httpOnly: true,
-    maxAge: process.env.COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-    sameSite: "None",
-    secure: true,
-  });
-
   // Send the success response with the token and created user.
 
   res.status(200).json({
     status: "success",
-    token,
     data: {
       user,
+      token,
     },
   });
 });
@@ -119,7 +110,6 @@ exports.login = catchAsync(async (req, res, next) => {
   const userCollection = database.collection("users");
 
   // Query the user using provided email.
-
   const user = await userCollection.findOne({ email });
 
   // If there is no user and the password is incorrect call the global error handler.
@@ -135,15 +125,6 @@ exports.login = catchAsync(async (req, res, next) => {
   // Sign a JWT token.
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
-  });
-
-  // Setting the cookies
-  res.cookie("jtoken", token, {
-    httpOnly: true,
-    maxAge: process.env.COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-    secure: true,
-    sameSite: "None",
-    path: "/",
   });
 
   // Sending success response with the token and the user.
@@ -254,7 +235,7 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
     await client.close();
 
     // Call the global error handling middleware to send error response.
-
+    console.log("Error:💥", err);
     return next(new AppError("Problem sending email. Please try again", 500));
   }
 });
@@ -317,15 +298,14 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
 
   // Sign a JWT token.
 
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
-  });
+  // const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+  //   expiresIn: process.env.JWT_EXPIRES_IN,
+  // });
 
   // Send a success response with the jwt token and user.
 
   res.status(200).json({
     status: "success",
-    token,
     user,
   });
 });
@@ -351,7 +331,7 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
 
-  // Reading the token from the header or cookie.
+  // Reading the token from the authorization header
 
   if (
     req.headers.authorization &&
@@ -360,12 +340,8 @@ exports.protect = catchAsync(async (req, res, next) => {
     token = req.headers.authorization.split(" ")[1];
   }
 
-  if (req.cookies.jtoken) {
-    token = req.cookies.jtoken;
-  }
-
   // Check if the token exists if not call the global error handling middleware.
-
+  console.log(token);
   if (!token) {
     return next(
       new AppError("You are not logged in. Please login to continue", 401)

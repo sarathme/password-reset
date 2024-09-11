@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-const cookieParser = require("cookie-parser");
 
 const globalErrorHandler = require("./controllers/errorController");
 const AppError = require("./utils/appError");
@@ -19,10 +18,6 @@ app.use(
     credentials: true,
   })
 );
-
-// USING COOKIE-PARSER PACKAGE TO PARSE THE COOKIES IN THE HEADER.
-
-app.use(cookieParser());
 
 // Middleware to attach body to request object and parse JSON.
 app.use(express.json());

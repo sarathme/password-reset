@@ -8,7 +8,7 @@ const sendEmail = async (options) => {
   // Create a transporter object with the SMTP credentials.
 
   const transporter = nodemailer.createTransport({
-    host: "sandbox.smtp.mailtrap.io",
+    host: "smtp-relay.brevo.com",
     port: 587,
     secure: false,
     auth: {
@@ -20,7 +20,7 @@ const sendEmail = async (options) => {
   // Define email options
 
   const mailOptions = {
-    from: "Sarasraman <hello@sarasraman.io>",
+    from: "Sarasraman <sarathsatheesh603@gmail.com>",
     to: options.email,
     subject: options.subject,
     text: options.message,
