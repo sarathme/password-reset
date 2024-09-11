@@ -14,7 +14,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "https://master--aquamarine-kleicha-ca3c86.netlify.app/",
     credentials: true,
   })
 );
