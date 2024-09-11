@@ -14,7 +14,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: "https://aquamarine-kleicha-ca3c86.netlify.app/",
+    origin: "https://aquamarine-kleicha-ca3c86.netlify.app",
     credentials: true,
   })
 );
