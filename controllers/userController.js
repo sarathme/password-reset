@@ -8,26 +8,42 @@ const { catchAsync } = require("./../utils/catchAsync");
 const AppError = require("./../utils/appError");
 const { promisify } = require("util");
 
+// Establishing MongoDB connection.
+
 const URL = process.env.DB_CONNECTION.replace(
   "<PASSWORD>",
   process.env.DB_PASSWORD
 );
 
+// Creating a MongoDB client instance.
+
 const client = new MongoClient(URL);
 
+// Handler function for signup route.
+
 exports.signup = catchAsync(async (req, res, next) => {
+  // Destructuring the request body thereby creating a shallow copy of the body fields.
+
   const { name, email, password } = req.body;
+
+  // Check for the required fields present in the body if not call the global error handler.
 
   if (!name || !email || !password) {
     next(new AppError("Please provide the required fields", 400));
     return;
   }
 
+  // Connecting and selecting the database and collections.
+
   await client.connect();
   const database = client.db("Password_Reset");
   const userCollection = database.collection("users");
 
+  // Check if the provided email already exists in the user collection.
+
   const existingUser = await userCollection.findOne({ email });
+
+  // If the user already exists call the global error handling middleware.
 
   if (existingUser) {
     next(new AppError(`User with the email already exists`, 400));
@@ -37,27 +53,42 @@ exports.signup = catchAsync(async (req, res, next) => {
 
   const newUser = { name, email };
 
+  // If the user is new user then encrypt the password.
+
   newUser.password = await bcrypt.hash(password, 12);
 
+  // Store the created user in the user collection.
+
   const created = await userCollection.insertOne(newUser);
+
+  // Retrieve the created user for sending as a response.
 
   const user = await userCollection.findOne(
     { _id: created.insertedId },
     { projection: { password: 0 } }
   );
 
+  // Close the DB connection.
+
   await client.close();
+
+  // Sign a JWT token.
 
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
 
+  // Setting the cookies.
+
   res.cookie("jtoken", token, {
     httpOnly: true,
     maxAge: process.env.COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-    sameSite: "Strict",
-    secure: false,
+    sameSite: "None",
+    secure: true,
   });
+
+  // Send the success response with the token and created user.
+
   res.status(200).json({
     status: "success",
     token,
@@ -67,34 +98,56 @@ exports.signup = catchAsync(async (req, res, next) => {
   });
 });
 
+// handler function for logging in users.
+
 exports.login = catchAsync(async (req, res, next) => {
+  // Destructuring the request body and get the value.
+
   const { email, password } = req.body;
+
+  // Check if the required fields exists. If not call the global error handler.
+
   if (!email || !password) {
     next(new AppError("Please provide email and password", 400));
     return;
   }
+
+  // Connecting and selecting the database and collections.
+
   await client.connect();
   const database = client.db("Password_Reset");
   const userCollection = database.collection("users");
 
+  // Query the user using provided email.
+
   const user = await userCollection.findOne({ email });
+
+  // If there is no user and the password is incorrect call the global error handler.
 
   if (!user || !(await bcrypt.compare(password, user.password))) {
     next(new AppError("Invalid email or password", 401));
     await client.close();
     return;
   }
+
   user.password = undefined;
+
+  // Sign a JWT token.
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
+
+  // Setting the cookies
   res.cookie("jtoken", token, {
     httpOnly: true,
     maxAge: process.env.COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-    secure: false,
-    sameSite: "Lax",
+    secure: true,
+    sameSite: "None",
     path: "/",
   });
+
+  // Sending success response with the token and the user.
+
   res.status(200).json({
     status: "success",
     token,
@@ -104,17 +157,31 @@ exports.login = catchAsync(async (req, res, next) => {
   });
 });
 
+// Handler function for forgot password route and to send email.
+
 exports.forgotPassword = catchAsync(async (req, res, next) => {
+  // Read the email sent through the request body.
+
   const { email } = req.body;
+
+  // If no email is present call the global erro handler.
 
   if (!email) {
     return next(new AppError("Please provide a email", 400));
   }
+
+  // Connecting and selecting the database and collections.
+
   await client.connect();
 
   const db = client.db("Password_Reset");
   const userCollection = db.collection("users");
+
+  // Query the user with the provided email.
+
   const user = await userCollection.findOne({ email });
+
+  // If no user exists with the email call the global error handler.
 
   if (!user) {
     next(new AppError("No user found with the email", 404));
@@ -122,14 +189,22 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
     return;
   }
 
+  // Generate password reset token using builtin crypto package.
+
   const resetToken = crypto.randomBytes(32).toString("hex");
+
+  // Create the hash of the reset token to store in the database.
 
   const passwordResetToken = crypto
     .createHash("sha256")
     .update(resetToken)
     .digest("hex");
 
+  // Set the reset token expiry.
+
   const resetTokenExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  // Store the expiry and the hashed reset token in the user document.
 
   await userCollection.findOneAndUpdate(
     { _id: user._id },
@@ -141,8 +216,15 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
     }
   );
 
+  // Constuct a reset url to be sent through email. The reset token is not the hashed token.
+
   const resetURL = `${req.headers["x-frontend-url"]}/resetPassword/${resetToken}`;
+
+  // Construct a message to send through the email with the reset url.
+
   const message = `Forget your password? Please send a request with your new password ${resetURL}`;
+
+  // Send the email using node-mailer package. Please resfer email.js file in utils folder for node-mailer implementation.
 
   try {
     await sendEmail({
@@ -151,11 +233,15 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
       message,
     });
 
+    // Sending a success response when the email is sent successfully.
+
     res.status(200).json({
       status: "success",
       message: "Email sent successfully",
     });
   } catch (err) {
+    // Clearing the reset token and expiry in the user document if the email is not sent.
+
     await userCollection.findOneAndUpdate(
       { _id: user._id },
       {
@@ -166,31 +252,49 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
       }
     );
     await client.close();
+
+    // Call the global error handling middleware to send error response.
+
     return next(new AppError("Problem sending email. Please try again", 500));
   }
 });
 
+// Handler function for resetting the password.
+
 exports.resetPassword = catchAsync(async (req, res, next) => {
+  // Connect to the database and selecting the collection.
+
   await client.connect();
   const database = client.db("Password_Reset");
   const userCollection = database.collection("users");
+
+  // Create the hash using crypto package for the reset token reiced through the url.
+  // Inorder to compare with the hash in the database user document.
 
   const hashedToken = crypto
     .createHash("sha256")
     .update(req.params.token)
     .digest("hex");
 
+  // Check for the user with the hashed reset token in the user document and also check if the token is expired.
+
   let user = await userCollection.findOne({
     passwordResetToken: hashedToken,
     resetTokenExpiresAt: { $gt: new Date(Date.now()) },
   });
+
+  // If no user is found send an error response using global error handler.
 
   if (!user) {
     await client.close();
     return next(new AppError("Token is invalid or expired", 400));
   }
 
+  // If the user exists encrypt the password using bcrypt package.
+
   const password = await bcrypt.hash(req.body.password, 12);
+
+  // Save the updated password in the user document and clear the reset token and expiry.
 
   user = await userCollection.findOneAndUpdate(
     { _id: user._id },
@@ -211,9 +315,13 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
     }
   );
 
+  // Sign a JWT token.
+
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
+
+  // Send a success response with the jwt token and user.
 
   res.status(200).json({
     status: "success",
@@ -222,25 +330,29 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.getUser = catchAsync(async (req, res, next) => {
-  console.log("Got here");
-  const user = {
-    ...req.user,
-    password: undefined,
-    passwordResetToken: undefined,
-    resetTokenExpiresAt: undefined,
-  };
-  res.status(200).json({
-    status: "success",
-    data: {
-      user,
-    },
-  });
-});
+// exports.getUser = catchAsync(async (req, res, next) => {
+//   console.log("Got here");
+//   const user = {
+//     ...req.user,
+//     password: undefined,
+//     passwordResetToken: undefined,
+//     resetTokenExpiresAt: undefined,
+//   };
+//   res.status(200).json({
+//     status: "success",
+//     data: {
+//       user,
+//     },
+//   });
+// });
+
+// handler function to protect a route for checking the user is logged in.
 
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
-  console.log(req.headers.authorization);
+
+  // Reading the token from the header or cookie.
+
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
@@ -252,14 +364,16 @@ exports.protect = catchAsync(async (req, res, next) => {
     token = req.cookies.jtoken;
   }
 
-  // Check if the token exists
+  // Check if the token exists if not call the global error handling middleware.
+
   if (!token) {
     return next(
       new AppError("You are not logged in. Please login to continue", 401)
     );
   }
 
-  // Verify the token
+  // Verify the token if it is expired send error response using global error handling middleware.
+
   let decoded;
   try {
     decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
@@ -268,19 +382,30 @@ exports.protect = catchAsync(async (req, res, next) => {
       new AppError("Session expired. Please login again to continue", 401)
     );
   }
+
+  // Connecting database and selecting users collection.
+
   await client.connect();
   const database = client.db("Password_Reset");
   const userCollection = database.collection("users");
+
   // Check if the user exists
   const currentUser = await userCollection.findOne({
     _id: new ObjectId(decoded.id),
   });
+
+  // If the user doen't exists send an error response using the global error handler.
 
   if (!currentUser) {
     await client.close();
     return next(new AppError("User doesn't exists or invalid token", 401));
   }
 
+  // Setting the user in the request.
+
   req.user = currentUser;
+
+  // Call the next middleware in the stack.
+
   next();
 });

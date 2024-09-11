@@ -1,7 +1,12 @@
+// SENDING MAIL USING nodemailer package
+
 const nodemailer = require("nodemailer");
 
+// Defining a function to send an email.
+
 const sendEmail = async (options) => {
-  // Create a transporter
+  // Create a transporter object with the SMTP credentials.
+
   const transporter = nodemailer.createTransport({
     host: "sandbox.smtp.mailtrap.io",
     port: 587,
@@ -13,6 +18,7 @@ const sendEmail = async (options) => {
   });
 
   // Define email options
+
   const mailOptions = {
     from: "Sarasraman <hello@sarasraman.io>",
     to: options.email,
