@@ -341,7 +341,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   }
 
   // Check if the token exists if not call the global error handling middleware.
-  console.log(token);
+
   if (!token) {
     return next(
       new AppError("You are not logged in. Please login to continue", 401)
