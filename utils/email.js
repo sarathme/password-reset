@@ -8,8 +8,8 @@ const sendEmail = async (options) => {
   // Create a transporter object with the SMTP credentials.
 
   const transporter = nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 587,
+    host: process.env.EMAIL_HOST,
+    port: process.env.EMAIL_PORT,
     secure: false,
     auth: {
       user: process.env.EMAIL_USERNAME,
